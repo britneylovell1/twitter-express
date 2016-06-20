@@ -6,7 +6,7 @@ var client = require('../db/index');
 module.exports = function makeRouterWithSockets (io) {
 
   function respondWithAllTweets (req, res, next){
-    var joinedTweets = 'SELECT Users.name, Tweets.content FROM Users INNER JOIN Tweets ON Users.id = Tweets.userid';
+    var joinedTweets = 'SELECT Users.name, Tweets.content, Tweets.id FROM Users INNER JOIN Tweets ON Users.id = Tweets.userid';
 
     client.query(joinedTweets, function (err, result) {
       if (err) return next(err); // pass errors to Express
@@ -41,10 +41,8 @@ module.exports = function makeRouterWithSockets (io) {
   // // single-tweet page
   router.get('/tweets/:id', function(req, res, next){
     var queryRequest = 'SELECT content FROM Tweets WHERE userid=$1';
-    console.log(req.params.id);
-    console.log(queryRequest);
 
-    client.query(queryRequest, [Number(req.params.id)], function(err, result){
+    client.query(queryRequest, [req.params.id], function(err, result){
       if (err) return next(err); // pass errors to Express
       var tweetsWithThatId = result.rows;
       res.render('index', {
@@ -54,25 +52,40 @@ module.exports = function makeRouterWithSockets (io) {
     });
   });
 
-  // router.get('/tweets/:id', function(req, res, next){
-  //   var tweetsWithThatId = tweetBank.find({ id: Number(req.params.id) });
-  //   res.render('index', {
-  //     title: 'Twitter.js',
-  //     tweets: tweetsWithThatId // an array of only one element ;-)
-  //   });
-  // });
+  // // create a new tweet with existing name
+  router.post('/tweets', function(req, res, next){
+    var nameQuery = 'SELECT users.id FROM Users WHERE users.name=$1';
+    var queryRequest1 = 'INSERT INTO Tweets (id, userId, content) VALUES ((LEN(id)+1), userId=$1, content=$2)';
+    var returnedUserId;
 
-  // // create a new tweet
+    client.query(nameQuery, [req.params.name], function(err, result){
+      var returnedUserId = result.rows;
+    });
+
+    client.query(queryRequest1, [returnedUserId[0], req.body.text], function(err, result){
+      var newTweet = req.body.name
+      io.sockets.emit('new_tweet', newTweet);
+      res.redirect('/');
+    });
+  });
+
   // router.post('/tweets', function(req, res, next){
   //   var newTweet = tweetBank.add(req.body.name, req.body.text);
   //   io.sockets.emit('new_tweet', newTweet);
   //   res.redirect('/');
   // });
 
-  // // replaced this hard-coded route with general static routing in app.js
-  // router.get('/stylesheets/style.css', function(req, res, next){
-  //   res.sendFile('/stylesheets/style.css', { root: __dirname + '/../public/' });
-  // });
+    // // create a new tweet with new name
+  router.post('/tweets', function(req, res, next){
+    var queryRequest1 = 'INSERT INTO Tweets (id, userId, content) VALUES (some_id, some_user_id, content=$1)'
+    var queryRequest2 = 'INSERT INTO Users (id, name, pictureUrl) VALUES (some_id, name=$2, some_picture)'
+
+    client.query(queryRequest1, [req.body.text, req.body.name], function(err, result){
+      var newTweet = req.body.name
+      io.sockets.emit('new_tweet', newTweet);
+      res.redirect('/');
+    });
+  });
 
   return router;
 }
